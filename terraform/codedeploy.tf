@@ -1,27 +1,4 @@
-resource "aws_iam_role" "codedeploy_role" {
-  name = "${local.name}-codedeploy-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "codedeploy.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "codedeploy_role_attach" {
-  role       = aws_iam_role.codedeploy_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS"
-}
-
-resource "aws_codedeploy_app" "ecs" {
-  name             = "flask-codedeploy-app"
+resource "aws_codedeploy_app" "flask" {
   compute_platform = "ECS"
   name             = "flask-deploy"
 }
@@ -59,7 +36,7 @@ resource "aws_codedeploy_deployment_group" "flask" {
   load_balancer_info {
     target_group_pair_info {
       prod_traffic_route {
-        listener_arns = [aws_lb_listener.http_listener.arn]
+        listener_arns = [aws_lb_listener.http_listener]
       }
 
       target_group {
@@ -67,8 +44,87 @@ resource "aws_codedeploy_deployment_group" "flask" {
       }
 
       target_group {
-        name = module.alb.target_groups["ex_ecs"].name
+        name = aws_lb_target_group.tg[1].name
       }
+
+      
     }
   }
+
+}
+
+data "aws_iam_policy_document" "assume_by_codedeploy" {
+  statement {
+    sid     = ""
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["codedeploy.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "codedeploy" {
+  name               = "codedeploy"
+  assume_role_policy = data.aws_iam_policy_document.assume_by_codedeploy.json
+}
+
+
+data "aws_iam_policy_document" "codedeploy" {
+  statement {
+    sid    = "AllowLoadBalancingAndECSModifications"
+    effect = "Allow"
+
+    actions = [
+      "ecs:CreateTaskSet",
+      "ecs:DeleteTaskSet",
+      "ecs:DescribeServices",
+      "ecs:UpdateServicePrimaryTaskSet",
+      "elasticloadbalancing:DescribeListeners",
+      "elasticloadbalancing:DescribeRules",
+      "elasticloadbalancing:DescribeTargetGroups",
+      "elasticloadbalancing:ModifyListener",
+      "elasticloadbalancing:ModifyRule",
+      "s3:GetObject"
+    ]
+
+    resources = ["*"]
+  }
+  statement {
+    sid    = "AllowPassRole"
+    effect = "Allow"
+
+    actions = ["iam:PassRole"]
+
+    resources = [
+      aws_iam_role.app_task_role.arn
+    ]
+  }
+
+  statement {
+    sid    = "DeployService"
+    effect = "Allow"
+
+    actions = ["ecs:DescribeServices",
+      "codedeploy:GetDeploymentGroup",
+      "codedeploy:CreateDeployment",
+      "codedeploy:GetDeployment",
+      "codedeploy:GetDeploymentConfig",
+    "codedeploy:RegisterApplicationRevision"]
+
+    resources = [
+      aws_ecs_service.flask.id,
+      aws_codedeploy_deployment_group.flask.arn,
+      "arn:aws:codedeploy:${local.region}:${local.aws_account_id}:deploymentconfig:*}",
+      aws_codedeploy_app.flask.arn
+    ]
+  }
+
+
+}
+resource "aws_iam_role_policy" "codedeploy" {
+  role   = aws_iam_role.codedeploy.name
+  policy = data.aws_iam_policy_document.codedeploy.json
 }
