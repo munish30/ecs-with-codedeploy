@@ -1,6 +1,3 @@
-# ------------------------------------------------------------------------------
-# IAM Role for CodeDeploy
-# ------------------------------------------------------------------------------
 resource "aws_iam_role" "codedeploy_role" {
   name = "${local.name}-codedeploy-role"
 
@@ -23,17 +20,11 @@ resource "aws_iam_role_policy_attachment" "codedeploy_role_attach" {
   policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS"
 }
 
-# ------------------------------------------------------------------------------
-# CodeDeploy Application
-# ------------------------------------------------------------------------------
 resource "aws_codedeploy_app" "ecs" {
   name             = "flask-codedeploy-app"
   compute_platform = "ECS"
 }
 
-# ------------------------------------------------------------------------------
-# CodeDeploy Deployment Group (Blue/Green)
-# ------------------------------------------------------------------------------
 resource "aws_codedeploy_deployment_group" "ecs" {
   app_name               = aws_codedeploy_app.ecs.name
   deployment_group_name  = "flask-deployment-group"
