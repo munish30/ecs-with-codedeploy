@@ -80,8 +80,8 @@ jobs:
       - name: Create CodeDeploy deployment (Blue/Green)
         run: |
           aws deploy create-deployment \
-            --application-name "${{ env.CODEDEPLOY_APP_NAME }}" \
-            --deployment-group-name "${{ env.CODEDEPLOY_DEPLOYMENT_GROUP }}" \
-            --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
-            --deployment-style deploymentType=BLUE_GREEN,deploymentOption=WITH_TRAFFIC_CONTROL \
-            --github-location repository=${{ github.repository }},commitId=${IMAGE_TAG}
+          --application-name "$CODEDEPLOY_APP_NAME" \
+          --deployment-group-name "$CODEDEPLOY_DEPLOYMENT_GROUP" \
+          --deployment-config-name "CodeDeployDefault.ECSCanary10Percent5Minutes" \
+          --deployment-style "deploymentType=BLUE_GREEN,deploymentOption=WITH_TRAFFIC_CONTROL" \
+          --github-location "repository=${GITHUB_REPOSITORY},commitId=$IMAGE_TAG"
