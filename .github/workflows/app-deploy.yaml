@@ -1,6 +1,7 @@
 name: Deploy to ECS via CodeDeploy
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["Build and Push Docker Image"]
     types:
