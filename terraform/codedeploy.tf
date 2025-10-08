@@ -1,3 +1,4 @@
+/*
 resource "aws_iam_role" "codedeploy_role" {
   name = "${local.name}-codedeploy-role"
 
@@ -77,3 +78,4 @@ resource "aws_codedeploy_deployment_group" "ecs" {
     }
   }
 }
+*/
