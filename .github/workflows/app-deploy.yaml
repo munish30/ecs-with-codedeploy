@@ -23,15 +23,15 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v5.0.0
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Set image tag and role ARN
+      - name: Set image tag and ECS execution role
         run: |
-          echo "IMAGE_TAG=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
           echo "ECS_EXECUTION_ROLE_ARN=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" >> $GITHUB_ENV
 
       - name: Create task definition file
@@ -60,28 +60,28 @@ jobs:
 
       - name: Register new task definition
         id: register-task
-        run: aws ecs register-task-definition --cli-input-json file://taskdef.json > taskdef-response.json
+        run: |
+          aws ecs register-task-definition --cli-input-json file://taskdef.json > taskdef-response.json
 
-      - name: Create appspec.yaml
+      - name: Create CodeDeploy AppSpec JSON
         run: |
           TASK_DEF_ARN=$(jq -r '.taskDefinition.taskDefinitionArn' taskdef-response.json)
-          cat > appspec.yaml <<EOF
-          version: 1
-          Resources:
-            - TargetService:
-                Type: AWS::ECS::Service
-                Properties:
-                  TaskDefinition: "$TASK_DEF_ARN"
-                  LoadBalancerInfo:
-                    ContainerName: "flask-container"
-                    ContainerPort: 8000
+
+          cat > appspec.json <<EOF
+          {
+            "applicationName": "$CODEDEPLOY_APP_NAME",
+            "deploymentGroupName": "$CODEDEPLOY_DEPLOYMENT_GROUP",
+            "deploymentConfigName": "CodeDeployDefault.ECSCanary10Percent5Minutes",
+            "revision": {
+              "revisionType": "AppSpecContent",
+              "appSpecContent": {
+                "content": "{ \"version\": 1, \"Resources\": [ { \"TargetService\": { \"Type\": \"AWS::ECS::Service\", \"Properties\": { \"TaskDefinition\": \"$TASK_DEF_ARN\", \"LoadBalancerInfo\": { \"ContainerName\": \"flask-container\", \"ContainerPort\": 8000 } } } } ] }"
+              }
+            }
+          }
           EOF
 
-      - name: Create CodeDeploy deployment (Blue/Green)
+      - name: Deploy to ECS via CodeDeploy (Blue/Green)
         run: |
           aws deploy create-deployment \
-          --application-name "$CODEDEPLOY_APP_NAME" \
-          --deployment-group-name "$CODEDEPLOY_DEPLOYMENT_GROUP" \
-          --deployment-config-name "CodeDeployDefault.ECSCanary10Percent5Minutes" \
-          --deployment-style "deploymentType=BLUE_GREEN,deploymentOption=WITH_TRAFFIC_CONTROL" \
-          --github-location "repository=${GITHUB_REPOSITORY},commitId=$IMAGE_TAG"
+            --cli-input-json file://appspec.json
