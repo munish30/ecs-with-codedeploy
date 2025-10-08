@@ -36,7 +36,7 @@ resource "aws_codedeploy_deployment_group" "flask" {
   load_balancer_info {
     target_group_pair_info {
       prod_traffic_route {
-        listener_arns = [aws_lb_listener.http_listener]
+        listener_arns = [aws_lb_listener.http_listener.arn]
       }
 
       target_group {
