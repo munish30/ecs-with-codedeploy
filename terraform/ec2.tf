@@ -102,7 +102,7 @@ module "autoscaling_sg" {
   computed_ingress_with_source_security_group_id = [
     {
       rule                     = "http-80-tcp"
-      source_security_group_id = module.alb.security_group_id
+      source_security_group_id = aws_security_group.application_elb_sg.id
     }
   ]
   number_of_computed_ingress_with_source_security_group_id = 1

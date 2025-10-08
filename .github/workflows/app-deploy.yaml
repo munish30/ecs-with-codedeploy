@@ -10,8 +10,8 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: flask-app
-  CODEDEPLOY_APP_NAME: flask-codedeploy-app
-  CODEDEPLOY_DEPLOYMENT_GROUP: flask-deployment-group
+  CODEDEPLOY_APP_NAME: flask-deploy
+  CODEDEPLOY_DEPLOYMENT_GROUP: flask-deploy
 
 jobs:
   deploy:
@@ -38,7 +38,7 @@ jobs:
         run: |
           cat > taskdef.json <<EOF
           {
-            "family": "flask-app-task",
+            "family": "flask-task",
             "executionRoleArn": "${ECS_EXECUTION_ROLE_ARN}",
             "containerDefinitions": [
               {
@@ -75,7 +75,7 @@ jobs:
             "revision": {
               "revisionType": "AppSpecContent",
               "appSpecContent": {
-                "content": "{ \"version\": 1, \"Resources\": [ { \"TargetService\": { \"Type\": \"AWS::ECS::Service\", \"Properties\": { \"TaskDefinition\": \"$TASK_DEF_ARN\", \"LoadBalancerInfo\": { \"ContainerName\": \"flask-container\", \"ContainerPort\": 8000 } } } } ] }"
+                "content": "{ \"version\": 1, \"Resources\": [ { \"TargetService\": { \"Type\": \"AWS::ECS::Service\", \"Properties\": { \"TaskDefinition\": \"$TASK_DEF_ARN\", \"LoadBalancerInfo\": { \"ContainerName\": \"flask-app\", \"ContainerPort\": 8000 } } } } ] }"
               }
             }
           }
