@@ -1,0 +1,86 @@
+name: Deploy to ECS via CodeDeploy
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Docker Image"]
+    types:
+      - completed
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: flask-app
+  CODEDEPLOY_APP_NAME: flask-codedeploy-app
+  CODEDEPLOY_DEPLOYMENT_GROUP: flask-deployment-group
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5.0.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set image tag and role ARN
+        run: |
+          echo "IMAGE_TAG=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_ENV
+          echo "ECS_EXECUTION_ROLE_ARN=arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" >> $GITHUB_ENV
+
+      - name: Create task definition file
+        run: |
+          cat > taskdef.json <<EOF
+          {
+            "family": "flask-app-task",
+            "executionRoleArn": "${ECS_EXECUTION_ROLE_ARN}",
+            "containerDefinitions": [
+              {
+                "name": "flask-container",
+                "image": "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${IMAGE_TAG}",
+                "portMappings": [
+                  {
+                    "containerPort": 8000,
+                    "protocol": "tcp"
+                  }
+                ],
+                "essential": true
+              }
+            ],
+            "cpu": "256",
+            "memory": "512"
+          }
+          EOF
+
+      - name: Register new task definition
+        id: register-task
+        run: aws ecs register-task-definition --cli-input-json file://taskdef.json > taskdef-response.json
+
+      - name: Create appspec.yaml
+        run: |
+          TASK_DEF_ARN=$(jq -r '.taskDefinition.taskDefinitionArn' taskdef-response.json)
+          cat > appspec.yaml <<EOF
+          version: 1
+          Resources:
+            - TargetService:
+                Type: AWS::ECS::Service
+                Properties:
+                  TaskDefinition: "$TASK_DEF_ARN"
+                  LoadBalancerInfo:
+                    ContainerName: "flask-container"
+                    ContainerPort: 8000
+          EOF
+
+      - name: Create CodeDeploy deployment (Blue/Green)
+        run: |
+          aws deploy create-deployment \
+            --application-name "${{ env.CODEDEPLOY_APP_NAME }}" \
+            --deployment-group-name "${{ env.CODEDEPLOY_DEPLOYMENT_GROUP }}" \
+            --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
+            --deployment-style deploymentType=BLUE_GREEN,deploymentOption=WITH_TRAFFIC_CONTROL \
+            --github-location repository=${{ github.repository }},commitId=${IMAGE_TAG}
